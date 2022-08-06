@@ -2,6 +2,7 @@
 
 import Combine
 import UIKit
+import os
 
 protocol EditorDelegate: AnyObject {
     func didCreateEditor(editor: IINKEditor?)
@@ -9,6 +10,7 @@ protocol EditorDelegate: AnyObject {
 
 /// This class is the ViewModel of the EditorViewController. It handles all its business logic.
 
+@available(iOS 14.0, *)
 class EditorViewModel {
 
     //MARK: - Reactive Properties
@@ -25,6 +27,7 @@ class EditorViewModel {
     private weak var smartGuideDelegate: SmartGuideViewControllerDelegate?
     private var smartGuideDisabled: Bool = false
     private var didSetConstraints: Bool = false
+    private let logger: Logger
 
     init(engine: IINKEngine?,
          inputMode: InputMode,
@@ -35,9 +38,10 @@ class EditorViewModel {
         self.inputMode = inputMode
         self.editorDelegate = editorDelegate
         self.smartGuideDelegate = smartGuideDelegate
+        self.logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "editorViewModel")
     }
 
-    func setupModel(with panGesture: UIPanGestureRecognizer?) {
+    func setupModel(with panGesture: UIPanGestureRecognizer?, pinchGesture: UIPinchGestureRecognizer?) {
         let model = EditorModel()
         let displayViewModel = DisplayViewModel()
         self.initEditor(with: displayViewModel)
@@ -52,6 +56,9 @@ class EditorViewModel {
         model.neboInputView?.editor = self.editor
         if let panGesture = panGesture {
             model.neboInputView?.addGestureRecognizer(panGesture)
+        }
+        if let pinchGesture = pinchGesture {
+            model.neboInputView?.addGestureRecognizer(pinchGesture)
         }
         self.model = model
     }
@@ -109,6 +116,18 @@ class EditorViewModel {
         self.editor?.renderer.viewOffset = newOffset
         if state == UIGestureRecognizer.State.ended {
             self.originalViewOffset = self.editor?.renderer.viewOffset ?? CGPoint.zero
+        }
+        NotificationCenter.default.post(name: DisplayViewController.refreshNotification, object: nil)
+    }
+    
+    func handlePinchGestureRecognizerAction(with scale: CGFloat, state: UIGestureRecognizer.State) {
+        guard self.editor?.isScrollAllowed == true else {
+            return
+        }
+        do {
+            try self.editor?.renderer.zoom(Float(scale))
+        } catch {
+            logger.error("pinch failed \(error.localizedDescription)")
         }
         NotificationCenter.default.post(name: DisplayViewController.refreshNotification, object: nil)
     }
